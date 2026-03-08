@@ -418,6 +418,22 @@ export function OfficeCanvas({ officeState, onClick, isEditMode, editorState, on
         return
       }
 
+      // Left button (button 0) in non-edit mode: pan the map
+      if (e.button === 0 && !isEditMode) {
+        e.preventDefault()
+        officeState.cameraFollowId = null
+        isPanningRef.current = true
+        panStartRef.current = {
+          mouseX: e.clientX,
+          mouseY: e.clientY,
+          panX: panRef.current.x,
+          panY: panRef.current.y,
+        }
+        const canvas = canvasRef.current
+        if (canvas) canvas.style.cursor = 'grabbing'
+        return
+      }
+
       // Right-click in edit mode for erasing
       if (e.button === 2 && isEditMode) {
         const tile = screenToTile(e.clientX, e.clientY)
@@ -488,10 +504,12 @@ export function OfficeCanvas({ officeState, onClick, isEditMode, editorState, on
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button === 1) {
-        isPanningRef.current = false
-        const canvas = canvasRef.current
-        if (canvas) canvas.style.cursor = isEditMode ? 'crosshair' : 'default'
+      if (e.button === 1 || e.button === 0) {
+        if (isPanningRef.current) {
+          isPanningRef.current = false
+          const canvas = canvasRef.current
+          if (canvas) canvas.style.cursor = isEditMode ? 'crosshair' : 'default'
+        }
         return
       }
       if (e.button === 2) {
