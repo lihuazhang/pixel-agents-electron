@@ -20,11 +20,21 @@ export class TerminalManager {
 
   createTerminal(cwd: string): number {
     const id = this.nextId++
-    const ptyProcess = pty.spawn(process.platform === 'win32' ? 'powershell' : 'zsh', [], {
+
+    // Determine shell path based on platform
+    const shell = process.platform === 'win32'
+      ? 'powershell.exe'
+      : process.env.SHELL || '/bin/zsh'
+
+    const ptyProcess = pty.spawn(shell, [], {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,
-      cwd
+      cwd,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color'
+      }
     })
 
     const sessionId = this.generateSessionId()
@@ -46,16 +56,21 @@ export class TerminalManager {
     return id
   }
 
-  attachExternalTerminal(pid: number, jsonlFile: string): number {
+  attachExternalTerminal(pid: number, jsonlFile: string, cwd?: string, sessionId?: string): number {
     const id = this.nextId++
+    const extractedSessionId = sessionId || path.basename(jsonlFile, '.jsonl')
+    const extractedCwd = cwd || this.inferCwdFromJsonlPath(jsonlFile)
+
     this.terminals.set(id, {
       id,
       pty: null,
-      cwd: '',
-      sessionId: '',
+      cwd: extractedCwd,
+      sessionId: extractedSessionId,
       jsonlFile,
       agentId: -1
     })
+
+    console.log(`[TerminalManager] Attached external terminal ${id}: session=${extractedSessionId}, cwd=${extractedCwd}`)
     return id
   }
 
@@ -116,6 +131,47 @@ export class TerminalManager {
   }
 
   private hashProjectPath(projectPath: string): string {
-    return projectPath.replace(/[:\\/]/g, '-')
+    // Match Claude Code's format: leading '-' for absolute paths
+    // Replace path separators and special chars with '-'
+    const sanitized = projectPath.replace(/[:\\]/g, '-')
+    if (sanitized.startsWith('/')) {
+      return '-' + sanitized.substring(1).replace(/\//g, '-').replace(/-$/, '')
+    }
+    return sanitized.replace(/\//g, '-')
+  }
+
+  /**
+   * Infer the working directory from a JSONL file path
+   * JSONL files are stored at ~/.claude/projects/<project-hash>/<session-id>.jsonl
+   */
+  private inferCwdFromJsonlPath(jsonlFile: string): string {
+    try {
+      const projectsDir = path.join(os.homedir(), '.claude', 'projects')
+      const relativePath = path.relative(projectsDir, jsonlFile)
+      const parts = relativePath.split(path.sep)
+
+      if (parts.length >= 2) {
+        const projectHash = parts[0]
+        // Try to reverse the hash back to a path
+        return this.unhashProjectPath(projectHash)
+      }
+    } catch (err) {
+      console.error('[TerminalManager] Error inferring cwd:', err)
+    }
+    return ''
+  }
+
+  /**
+   * Reverse the project path hash (best effort)
+   * Handles Claude Code's format where leading '-' indicates absolute path
+   */
+  private unhashProjectPath(dirName: string): string {
+    // Handle the leading '-' which indicates an absolute path
+    if (dirName.startsWith('-')) {
+      return dirName.substring(1).replace(/-/g, '/')
+    }
+    // For paths without leading '-', just replace - with /
+    const result = dirName.replace(/-/g, '/')
+    return result.startsWith('/') ? result : '/' + result
   }
 }
