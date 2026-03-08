@@ -168,10 +168,11 @@ export class AssetLoader {
   private parseCharacterPng(png: PNG): { down: string[][][]; up: string[][][]; right: string[][][] } {
     // Character sprites: 7 frames × 16px wide, 3 direction rows × 32px tall
     // Row 0 = down, Row 1 = up, Row 2 = right
+    // Actual character height is 29px (legs/feet extend to row 28), with 3px transparent padding at bottom
     const frames = 7
     const frameWidth = 16
     const rowHeight = 32
-    const pixelHeight = 24 // Actual sprite height (bottom-aligned with 8px padding)
+    const pixelHeight = 31 // Actual sprite height including legs/feet (bottom 1px is transparent padding)
 
     const down: string[][][] = []
     const up: string[][][] = []

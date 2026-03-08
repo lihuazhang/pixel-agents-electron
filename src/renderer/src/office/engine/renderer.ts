@@ -130,10 +130,9 @@ export function renderScene(
     const drawX = Math.round(offsetX + ch.x * zoom - cached.width / 2)
     const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - cached.height)
 
-    // Sort characters by bottom of their tile (not center) so they render
-    // in front of same-row furniture (e.g. chairs) but behind furniture
-    // at lower rows (e.g. desks, bookshelves that occlude from below).
-    const charZY = ch.y + TILE_SIZE / 2 + CHARACTER_Z_SORT_OFFSET
+    // Sort characters by pixel Y position (lower = in front = drawn later)
+    // Add TILE_SIZE to ensure characters render in front of furniture
+    const charZY = ch.y + TILE_SIZE + CHARACTER_Z_SORT_OFFSET
 
     // Matrix spawn/despawn effect — skip outline, use per-pixel rendering
     if (ch.matrixEffect) {
@@ -469,11 +468,10 @@ export function renderBubbles(
 
     const cached = getCachedSprite(sprite, zoom)
     // Position: centered above the character's head
-    // Character is anchored bottom-center at (ch.x, ch.y), sprite is 16x24
-    // Place bubble above head with a small gap; follow sitting offset
     const sittingOff = ch.state === CharacterState.TYPE ? BUBBLE_SITTING_OFFSET_PX : 0
     const bubbleX = Math.round(offsetX + ch.x * zoom - cached.width / 2)
-    const bubbleY = Math.round(offsetY + (ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX) * zoom - cached.height - 1 * zoom)
+    // Bubble Y: above character head (head at ch.y + TILE_SIZE/2 + sittingOff - 24)
+    const bubbleY = Math.round(offsetY + (ch.y + TILE_SIZE / 2 + sittingOff) * zoom - cached.height * 2 - 4 * zoom)
 
     ctx.save()
     if (alpha < 1.0) ctx.globalAlpha = alpha
