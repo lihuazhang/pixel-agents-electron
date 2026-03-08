@@ -66,6 +66,7 @@ export function useExtensionMessages(
   getOfficeState: () => OfficeState,
   onLayoutLoaded?: (layout: OfficeLayout) => void,
   isEditDirty?: () => boolean,
+  onAgentCreated?: (terminalId: number) => void,
 ): ExtensionMessageState {
   const [agents, setAgents] = useState<number[]>([])
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null)
@@ -113,9 +114,14 @@ export function useExtensionMessages(
         }
       } else if (msg.type === 'agentCreated') {
         const id = (msg.payload as any)?.id as number
+        const terminalId = (msg.payload as any)?.terminalId as number | undefined
         const folderName = (msg.payload as any)?.folderName as string | undefined
         setAgents((prev) => (prev.includes(id) ? prev : [...prev, id]))
         setSelectedAgent(id)
+        // Notify parent component about the new agent/terminal
+        if (terminalId && onAgentCreated) {
+          onAgentCreated(terminalId)
+        }
         os.addAgent(id, undefined, undefined, undefined, undefined, folderName)
         saveAgentSeats(os)
       } else if (msg.type === 'agentClosed') {
@@ -352,6 +358,14 @@ export function useExtensionMessages(
     }
     ipcBridge.addMessageListener(handler)
     vscode.postMessage({ type: 'webviewReady' })
+    // Request workspace folders
+    vscode.invoke('workspaceFolders').then((folders) => {
+      if (Array.isArray(folders)) {
+        setWorkspaceFolders(folders as WorkspaceFolder[])
+      }
+    }).catch((err) => {
+      console.error('[useExtensionMessages] Failed to get workspace folders:', err)
+    })
     return () => ipcBridge.removeMessageListener(handler)
   }, [getOfficeState])
 

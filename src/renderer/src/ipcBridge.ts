@@ -19,12 +19,22 @@ if (typeof window !== 'undefined' && window.pixelAgentsAPI) {
 }
 
 export const ipcBridge = {
-  // Send message to main process
+  // Send message to main process (fire-and-forget)
   postMessage: (data: ExtensionMessage) => {
     if (window.pixelAgentsAPI) {
-      window.pixelAgentsAPI.send(data.type, data)
+      window.pixelAgentsAPI.postMessage(data)
     } else {
       console.warn('[IPC Bridge] pixelAgentsAPI not available')
+    }
+  },
+
+  // Send message to main process and wait for response
+  invoke: async <T = unknown>(type: string, payload?: unknown): Promise<T> => {
+    if (window.pixelAgentsAPI) {
+      return window.pixelAgentsAPI.invoke(type, payload) as Promise<T>
+    } else {
+      console.warn('[IPC Bridge] pixelAgentsAPI not available')
+      throw new Error('pixelAgentsAPI not available')
     }
   },
 
@@ -41,5 +51,6 @@ export const ipcBridge = {
 
 // Alias for compatibility with existing code
 export const vscode = {
-  postMessage: ipcBridge.postMessage
+  postMessage: ipcBridge.postMessage,
+  invoke: ipcBridge.invoke
 }

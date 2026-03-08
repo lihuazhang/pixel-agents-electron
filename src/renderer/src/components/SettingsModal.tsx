@@ -189,22 +189,37 @@ export function SettingsModal({
     const newVal = !isSoundEnabled()
     setSoundEnabled(newVal)
     setSoundLocal(newVal)
-    vscode.postMessage({ type: 'setSoundEnabled', enabled: newVal })
+    vscode.invoke('setSoundEnabled', { enabled: newVal }).catch(console.error)
   }, [])
 
-  const handleOpenSessions = useCallback(() => {
-    vscode.postMessage({ type: 'openSessionsFolder' })
-    onClose()
+  const handleOpenSessions = useCallback(async () => {
+    try {
+      await vscode.invoke('openSessionsFolder')
+      onClose()
+    } catch (err) {
+      console.error('Failed to open sessions folder:', err)
+    }
   }, [onClose])
 
-  const handleExportLayout = useCallback(() => {
-    vscode.postMessage({ type: 'exportLayout' })
-    onClose()
+  const handleExportLayout = useCallback(async () => {
+    try {
+      await vscode.invoke('exportLayout')
+      onClose()
+    } catch (err) {
+      console.error('Failed to export layout:', err)
+    }
   }, [onClose])
 
-  const handleImportLayout = useCallback(() => {
-    vscode.postMessage({ type: 'importLayout' })
-    onClose()
+  const handleImportLayout = useCallback(async () => {
+    try {
+      const result = await vscode.invoke<{ success: boolean; layout?: unknown; error?: string }>('importLayout')
+      if (result && !result.success && result.error) {
+        console.error('Import layout failed:', result.error)
+      }
+      onClose()
+    } catch (err) {
+      console.error('Failed to import layout:', err)
+    }
   }, [onClose])
 
   if (!isOpen) return null

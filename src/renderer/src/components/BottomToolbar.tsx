@@ -80,9 +80,13 @@ export function BottomToolbar({
     }
   }
 
-  const handleFolderSelect = (folder: WorkspaceFolder) => {
+  const handleFolderSelect = async (folder: WorkspaceFolder) => {
     setIsFolderPickerOpen(false)
-    vscode.postMessage({ type: 'openClaude', folderPath: folder.path })
+    try {
+      await vscode.invoke('createTerminal', { cwd: folder.path })
+    } catch (err) {
+      console.error('Failed to create terminal:', err)
+    }
   }
 
   return (

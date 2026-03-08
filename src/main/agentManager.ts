@@ -26,6 +26,7 @@ export function createAgentState(
   projectDir: string,
   sessionId: string,
   folderName?: string,
+  isSubagent: boolean = false,
 ): AgentState {
   const expectedFile = path.join(projectDir, `${sessionId}.jsonl`)
 
@@ -45,6 +46,7 @@ export function createAgentState(
     permissionSent: false,
     hadToolsInTurn: false,
     folderName,
+    isSubagent,
   }
 }
 
@@ -81,6 +83,7 @@ export function persistAgents(
       jsonlFile: agent.jsonlFile,
       projectDir: agent.projectDir,
       folderName: agent.folderName,
+      isSubagent: agent.isSubagent,
     })
   }
 
@@ -133,6 +136,7 @@ export function restoreAgents(
       permissionSent: false,
       hadToolsInTurn: false,
       folderName: p.folderName,
+      isSubagent: p.isSubagent ?? false,
     }
 
     agents.set(p.id, agent)

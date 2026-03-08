@@ -1,0 +1,19 @@
+{
+  "name": "pixel-agents-remotion",
+  "version": "1.0.0",
+  "description": "Pixel Agents promotional video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts PixelAgentsPromo output.mp4",
+    "build": "remotion bundle src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.434",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "remotion": "^4.0.434",
+    "zod": "^3.0.0"
+  }
+}

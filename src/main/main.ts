@@ -6,6 +6,7 @@ import { TerminalManager } from './terminalManager.js'
 import { FileWatcher } from './fileWatcher.js'
 import { AssetLoader } from './assetLoader.js'
 import { LayoutPersistence } from './layoutPersistence.js'
+import { SessionMonitor, scanExternalSessions, isSessionActive, type DiscoveredSession } from './sessionScanner.js'
 import type { AgentState } from './types.js'
 import {
   processTranscriptLine,
@@ -41,6 +42,7 @@ let terminalManager: TerminalManager
 let fileWatcher: FileWatcher
 let assetLoader: AssetLoader
 let layoutPersistence: LayoutPersistence
+let sessionMonitor: SessionMonitor | null = null
 
 // Agent state management
 const agents = new Map<number, AgentState>()
@@ -48,6 +50,9 @@ const waitingTimers = new Map<number, ReturnType<typeof setTimeout>>()
 const permissionTimers = new Map<number, ReturnType<typeof setTimeout>>()
 const jsonlPollTimers = new Map<number, ReturnType<typeof setInterval>>()
 let nextAgentId = 1
+
+// Track external sessions we've already attached to
+const attachedExternalSessions = new Set<string>()
 
 // Settings path
 const SETTINGS_DIR = path.join(os.homedir(), '.pixel-agents-electron')
@@ -134,6 +139,10 @@ function setupIpcHandlers() {
         sendAssetsToRenderer(event)
         // Restore agents from previous session
         restoreAgentsOnStartup()
+        // Scan for and attach to existing external sessions
+        scanAndAttachExternalSessions()
+        // Start monitoring for new external sessions
+        initializeSessionMonitoring()
         break
       case 'openClaude': {
         // Legacy message from original webview - create new terminal
@@ -163,9 +172,10 @@ function setupIpcHandlers() {
             processJsonlLines(agentId, lines)
           })
 
-          // Notify renderer that agent was created
+          // Notify renderer that agent was created (legacy openClaude)
           sendToRenderer('agentCreated', {
             id: agentId,
+            terminalId,
             sessionId: terminal.sessionId,
             jsonlFile: terminal.jsonlFile
           })
@@ -174,6 +184,10 @@ function setupIpcHandlers() {
       }
       case 'createTerminal': {
         // Handled by ipcMain.handle below
+        break
+      }
+      case 'saveAgentSeats': {
+        // Handled by ipcMain.handle - just acknowledge here
         break
       }
       default:
@@ -209,6 +223,17 @@ function setupIpcHandlers() {
             console.log(`[Main] Terminal ${terminalId}: Read ${lines.length} new lines from JSONL`)
             processJsonlLines(agentId, lines)
           })
+
+          // Notify renderer that agent was created
+          sendToRenderer('agentCreated', {
+            id: agentId,
+            terminalId,
+            sessionId: terminal.sessionId,
+            jsonlFile: terminal.jsonlFile
+          })
+
+          // Persist agents
+          persistAgents(agents, AGENTS_SETTINGS_PATH)
         }
 
         return { terminalId }
@@ -252,22 +277,8 @@ function setupIpcHandlers() {
       case 'attachExternalTerminal': {
         const pid = payload?.pid as number
         const jsonlFile = payload?.jsonlFile as string
-        const terminalId = terminalManager.attachExternalTerminal(pid, jsonlFile)
-
-        // Create agent state for external terminal
-        const projectDir = path.dirname(jsonlFile)
-        const sessionId = path.basename(jsonlFile, '.jsonl')
-        const agentId = nextAgentId++
-        const agent = createAgentState(agentId, terminalId, projectDir, sessionId)
-        agents.set(agentId, agent)
-
-        // Start file watching
-        fileWatcher.watch(terminalId, jsonlFile, (lines: string[]) => {
-          console.log(`[Main] External terminal ${terminalId}: Read ${lines.length} new lines from JSONL`)
-          processJsonlLines(agentId, lines)
-        })
-
-        return { terminalId }
+        const result = attachExternalSession(jsonlFile, pid)
+        return result
       }
 
       case 'saveLayout': {
@@ -343,13 +354,14 @@ function setupIpcHandlers() {
       }
 
       case 'workspaceFolders': {
-        // Return initial workspace folders - typically just home directory
+        // Send workspace folders to renderer
         const home = app.getPath('home')
         const folders = [{
           name: path.basename(home) || 'home',
           path: home
         }]
-        return folders
+        sendToRenderer('workspaceFolders', { folders })
+        return null
       }
 
       case 'setSoundEnabled': {
@@ -390,21 +402,212 @@ function setupIpcHandlers() {
 function getProjectDirPath(cwd?: string): string | null {
   const workspacePath = cwd || os.homedir()
   if (!workspacePath) return null
-  const dirName = workspacePath.replace(/[^a-zA-Z0-9-]/g, '-')
+  // Match Claude Code's hash format: leading '-' for absolute paths
+  // Replace path separators and special chars with '-'
+  const sanitized = workspacePath.replace(/[:\\]/g, '-')
+  const dirName = sanitized.startsWith('/')
+    ? '-' + sanitized.substring(1).replace(/\//g, '-').replace(/-$/, '')
+    : sanitized.replace(/\//g, '-')
   const projectDir = path.join(os.homedir(), '.claude', 'projects', dirName)
   console.log(`[Pixel Agents] Project dir: ${workspacePath} → ${dirName}`)
   return projectDir
 }
 
+/**
+ * Reverse the project path hash to get workspace path
+ * Handles Claude Code's format where leading '-' indicates absolute path
+ */
+function unhashProjectPath(dirName: string): string {
+  if (dirName.startsWith('-')) {
+    return dirName.substring(1).replace(/-/g, '/')
+  }
+  const result = dirName.replace(/-/g, '/')
+  return result.startsWith('/') ? result : '/' + result
+}
+
+/**
+ * Attach to an external Claude session discovered via JSONL file
+ */
+function attachExternalSession(jsonlFile: string, pid?: number, isSubagent: boolean = false): { terminalId: number; agentId: number } | null {
+  // Check if we've already attached to this session
+  if (attachedExternalSessions.has(jsonlFile)) {
+    console.log(`[Main] Already attached to external session: ${jsonlFile}`)
+    return null
+  }
+
+  // Verify the file exists
+  if (!fs.existsSync(jsonlFile)) {
+    console.log(`[Main] External session file does not exist: ${jsonlFile}`)
+    return null
+  }
+
+  // Detect if this is a subagent session from the path
+  // Subagent files are in: ~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl
+  const parentDir = path.basename(path.dirname(jsonlFile))
+  isSubagent = isSubagent || parentDir === 'subagents'
+
+  // Create terminal for external session
+  const terminalId = terminalManager.attachExternalTerminal(pid || 0, jsonlFile)
+
+  // Get the actual project directory
+  // For subagents: go up two levels (subagents/ -> session dir/)
+  // For main sessions: go up one level
+  const actualProjectDir = isSubagent
+    ? path.dirname(path.dirname(jsonlFile))
+    : path.dirname(jsonlFile)
+  const sessionId = path.basename(jsonlFile, '.jsonl')
+
+  // Extract folder name from project directory
+  // Project dir is like: ~/.claude/projects/-Users-zhanglihua-code-project/<session-id>
+  const grandparentDir = path.dirname(actualProjectDir)
+  const projectDirName = path.basename(grandparentDir)
+  const workspacePath = unhashProjectPath(projectDirName)
+  const folderName = path.basename(workspacePath) || 'workspace'
+
+  // Create agent state with folder name and subagent flag
+  const agentId = nextAgentId++
+  const agent = createAgentState(agentId, terminalId, actualProjectDir, sessionId, folderName, isSubagent)
+  agents.set(agentId, agent)
+
+  // Mark as attached
+  attachedExternalSessions.add(jsonlFile)
+  sessionMonitor?.addKnownSession(jsonlFile)
+
+  // Start file watching
+  fileWatcher.watch(terminalId, jsonlFile, (lines: string[]) => {
+    console.log(`[Main] External terminal ${terminalId}: Read ${lines.length} new lines from JSONL`)
+    processJsonlLines(agentId, lines)
+  })
+
+  // Notify renderer with folder name and subagent status
+  sendToRenderer('agentCreated', {
+    id: agentId,
+    sessionId,
+    jsonlFile,
+    folderName,
+    isSubagent
+  })
+
+  console.log(`[Main] Attached to external ${isSubagent ? 'subagent' : 'session'}: ${sessionId} (agent ${agentId}) in ${folderName}`)
+
+  // Persist agents
+  persistAgents(agents, AGENTS_SETTINGS_PATH)
+
+  return { terminalId, agentId }
+}
+
+/**
+ * Scan for existing external sessions and attach to them
+ * Only attach to recently active sessions (modified within last 5 minutes)
+ */
+function scanAndAttachExternalSessions(): void {
+  console.log('[Main] Scanning for external Claude sessions...')
+
+  const sessions = scanExternalSessions()
+  console.log(`[Main] Found ${sessions.length} external session(s)`)
+
+  // Filter: only recently active sessions (modified within 5 minutes)
+  // This prevents loading all historical sessions
+  const activeSessions = sessions.filter(s => isSessionActive(s))
+  console.log(`[Main] Active sessions (last 5 min): ${activeSessions.length}`)
+
+  // Filter out sessions we've already attached to
+  const newSessions = activeSessions.filter(s => !attachedExternalSessions.has(s.jsonlFile))
+
+  for (const session of newSessions) {
+    console.log(`[Main] Attaching to external ${session.isSubagent ? 'subagent' : 'session'}: ${session.sessionId} (${session.workspacePath})`)
+    attachExternalSession(session.jsonlFile, undefined, session.isSubagent)
+  }
+}
+
+/**
+ * Initialize session monitoring for new external sessions
+ */
+function initializeSessionMonitoring(): void {
+  sessionMonitor = new SessionMonitor(5000) // Check every 5 seconds
+
+  sessionMonitor.start((session: DiscoveredSession) => {
+    console.log(`[Main] New external ${session.isSubagent ? 'subagent' : 'session'} detected: ${session.sessionId}`)
+    attachExternalSession(session.jsonlFile, undefined, session.isSubagent)
+  })
+
+  console.log('[Main] Session monitoring started')
+}
+
 function restoreAgentsOnStartup() {
-  restoreAgents(
-    AGENTS_SETTINGS_PATH,
-    agents,
-    { current: nextAgentId },
-    jsonlPollTimers,
-    sendToRenderer,
-    processJsonlLines
-  )
+  // Only restore agents with active JSONL files (modified within last 5 minutes)
+  // This prevents loading all historically saved sessions
+  if (fs.existsSync(AGENTS_SETTINGS_PATH)) {
+    try {
+      const persisted = JSON.parse(fs.readFileSync(AGENTS_SETTINGS_PATH, 'utf-8')) as Array<{
+        id: number
+        terminalId: number
+        jsonlFile: string
+        projectDir: string
+        folderName?: string
+      }>
+
+      // Filter to only active sessions
+      const activePersisted = persisted.filter(p => {
+        if (!fs.existsSync(p.jsonlFile)) return false
+        try {
+          const stat = fs.statSync(p.jsonlFile)
+          const age = Date.now() - stat.mtime.getTime()
+          return age < 5 * 60 * 1000 // 5 minutes
+        } catch {
+          return false
+        }
+      })
+
+      console.log(`[Main] Persisted agents: ${persisted.length}, Active: ${activePersisted.length}`)
+
+      // Write back only active agents
+      fs.writeFileSync(AGENTS_SETTINGS_PATH, JSON.stringify(activePersisted, null, 2), 'utf-8')
+
+      // Restore active agents
+      for (const p of activePersisted) {
+        const agent = {
+          id: p.id,
+          terminalId: p.terminalId,
+          projectDir: p.projectDir,
+          jsonlFile: p.jsonlFile,
+          fileOffset: 0,
+          lineBuffer: '',
+          activeToolIds: new Set(),
+          activeToolStatuses: new Map(),
+          activeToolNames: new Map(),
+          activeSubagentToolIds: new Map(),
+          activeSubagentToolNames: new Map(),
+          isWaiting: false,
+          permissionSent: false,
+          hadToolsInTurn: false,
+          folderName: p.folderName,
+        }
+
+        agents.set(p.id, agent)
+        console.log(`[Pixel Agents] Restored agent ${p.id} for terminal ${p.terminalId}`)
+
+        if (p.id >= nextAgentId) {
+          nextAgentId = p.id + 1
+        }
+
+        // Start polling for JSONL file
+        const stat = fs.statSync(p.jsonlFile)
+        agent.fileOffset = stat.size
+        startPollingJsonl(p.id, agent, jsonlPollTimers, sendToRenderer, processJsonlLines)
+      }
+    } catch (err) {
+      console.error('[Main] Failed to restore agents:', err)
+    }
+  }
+
+  // Add restored agents' JSONL files to attachedExternalSessions to avoid duplicates
+  for (const agent of agents.values()) {
+    if (agent.jsonlFile) {
+      attachedExternalSessions.add(agent.jsonlFile)
+      console.log(`[Main] Restored agent ${agent.id} session: ${agent.jsonlFile}`)
+    }
+  }
 
   // Send existing agents to renderer
   if (agents.size > 0) {
@@ -464,6 +667,8 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  // Stop session monitoring
+  sessionMonitor?.stop()
   // Save agents before quitting
   persistAgents(agents, AGENTS_SETTINGS_PATH)
   terminalManager.disposeAll()
@@ -473,6 +678,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  // Stop session monitoring
+  sessionMonitor?.stop()
   // Save agents before quitting
   persistAgents(agents, AGENTS_SETTINGS_PATH)
   terminalManager.disposeAll()

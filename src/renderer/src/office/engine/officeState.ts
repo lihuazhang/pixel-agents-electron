@@ -169,7 +169,7 @@ export class OfficeState {
   /**
    * Pick a diverse palette for a new agent based on currently active agents.
    * First 6 agents each get a unique skin (random order). Beyond 6, skins
-   * repeat in balanced rounds with a random hue shift (≥45°).
+   * repeat in balanced rounds (no hue shift to preserve original sprite colors).
    */
   private pickDiversePalette(): { palette: number; hueShift: number } {
     // Count how many non-sub-agents use each base palette (0-5)
@@ -185,11 +185,8 @@ export class OfficeState {
       if (counts[i] === minCount) available.push(i)
     }
     const palette = available[Math.floor(Math.random() * available.length)]
-    // First round (minCount === 0): no hue shift. Subsequent rounds: random ≥45°.
-    let hueShift = 0
-    if (minCount > 0) {
-      hueShift = HUE_SHIFT_MIN_DEG + Math.floor(Math.random() * HUE_SHIFT_RANGE_DEG)
-    }
+    // No hue shift - preserve original sprite colors
+    const hueShift = 0
     return { palette, hueShift }
   }
 

@@ -17,16 +17,18 @@
     "test:main": "vitest run tests/unit/main"
   },
   "dependencies": {
+    "@remotion/media-utils": "^4.0.434",
+    "@remotion/zod-types": "^4.0.434",
     "chokidar": "^4.0.3",
-    "node-pty": "^1.0.0",
+    "node-pty": "1.2.0-beta.11",
     "pngjs": "^7.0.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@remotion/cli": "^4.0.434",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/jsdom": "^28.0.0",
@@ -42,6 +44,9 @@
     "electron-vite": "^5.0.0",
     "happy-dom": "^20.8.3",
     "jsdom": "^28.1.0",
+    "playwright": "^1.58.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.7.3",
     "vite": "^6.2.0",
     "vitest": "^4.0.18"

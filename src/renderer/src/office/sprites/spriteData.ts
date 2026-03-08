@@ -1058,7 +1058,8 @@ export function getCharacterSprites(paletteIndex: number, hueShift = 0): Charact
 
   if (loadedCharacters) {
     // Use pre-colored character sprites directly (no palette swapping)
-    const char = loadedCharacters[paletteIndex % loadedCharacters.length]
+    const charIndex = paletteIndex % loadedCharacters.length
+    const char = loadedCharacters[charIndex]
     const d = char.down
     const u = char.up
     const rt = char.right

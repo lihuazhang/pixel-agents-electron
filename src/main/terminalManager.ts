@@ -1,6 +1,7 @@
 import * as pty from 'node-pty'
 import * as path from 'path'
 import * as os from 'os'
+import * as fs from 'fs'
 import { app } from 'electron'
 import * as crypto from 'crypto'
 
@@ -21,21 +22,47 @@ export class TerminalManager {
   createTerminal(cwd: string): number {
     const id = this.nextId++
 
-    // Determine shell path based on platform
-    const shell = process.platform === 'win32'
-      ? 'powershell.exe'
-      : process.env.SHELL || '/bin/zsh'
-
-    const ptyProcess = pty.spawn(shell, [], {
-      name: 'xterm-256color',
-      cols: 80,
-      rows: 24,
-      cwd,
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color'
+    // Determine shell path based on platform with robust fallbacks
+    let shell: string
+    if (process.platform === 'win32') {
+      shell = 'powershell.exe'
+    } else {
+      // Try SHELL env var first, then fallback to common shells
+      const shellEnv = process.env.SHELL
+      if (shellEnv && fs.existsSync(shellEnv)) {
+        shell = shellEnv
+      } else if (fs.existsSync('/bin/zsh')) {
+        shell = '/bin/zsh'
+      } else if (fs.existsSync('/bin/bash')) {
+        shell = '/bin/bash'
+      } else if (fs.existsSync('/bin/sh')) {
+        shell = '/bin/sh'
+      } else {
+        shell = '/bin/zsh' // Ultimate fallback, will throw if doesn't exist
       }
-    })
+    }
+
+    // Verify shell exists before spawning
+    if (!fs.existsSync(shell)) {
+      throw new Error(`Shell not found: ${shell}. SHELL=${process.env.SHELL}`)
+    }
+
+    let ptyProcess: pty.IPty
+    try {
+      ptyProcess = pty.spawn(shell, [], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 24,
+        cwd,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color'
+        }
+      })
+    } catch (err) {
+      console.error('[TerminalManager] Failed to spawn pty:', err)
+      throw new Error(`Failed to spawn terminal: ${err instanceof Error ? err.message : String(err)}`)
+    }
 
     const sessionId = this.generateSessionId()
     const jsonlFile = this.getJsonlPath(sessionId, cwd)

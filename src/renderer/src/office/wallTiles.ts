@@ -109,11 +109,14 @@ export function getWallInstances(
         ? getColorizedWallSprite(c, r, tileMap, wallColor)
         : getWallSprite(c, r, tileMap)
       if (!wallInfo) continue
+      // Wall z-sort: use the tile row bottom, same as furniture
+      // Walls should render behind characters at the same or lower rows
+      const zY = (r + 1) * TILE_SIZE
       instances.push({
         sprite: wallInfo.sprite,
         x: c * TILE_SIZE,
         y: r * TILE_SIZE + wallInfo.offsetY,
-        zY: (r + 1) * TILE_SIZE,
+        zY,
       })
     }
   }

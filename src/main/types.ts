@@ -16,6 +16,8 @@ export interface AgentState {
   hadToolsInTurn: boolean
   /** Workspace folder name (only set for multi-root workspaces) */
   folderName?: string
+  /** Whether this agent represents a subagent session */
+  isSubagent: boolean
 }
 
 // Persisted agent interface for saving/restoring agents across sessions
@@ -26,6 +28,8 @@ export interface PersistedAgent {
   projectDir: string
   /** Workspace folder name (only set for multi-root workspaces) */
   folderName?: string
+  /** Whether this agent represents a subagent session */
+  isSubagent?: boolean
 }
 
 // Terminal instance interface (already defined in terminalManager.ts, re-exported for convenience)

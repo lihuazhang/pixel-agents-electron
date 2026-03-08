@@ -93,9 +93,12 @@ export function ToolOverlay({
         if (!isSelected && !isHovered) return null
 
         // Position above character
-        const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0
+        // sittingOffset is in pixels, so scale by zoom and apply after converting tile coords
+        const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX * zoom : 0
         const screenX = (deviceOffsetX + ch.x * zoom) / dpr
-        const screenY = (deviceOffsetY + (ch.y + sittingOffset - TOOL_OVERLAY_VERTICAL_OFFSET) * zoom) / dpr
+        // Match character render position: feet at tile bottom - 22px from sprite top
+        // Character drawY = ch.y * zoom - 14*zoom + sittingOffset
+        const screenY = (deviceOffsetY + ch.y * zoom - TOOL_OVERLAY_VERTICAL_OFFSET * zoom - 14 * zoom + sittingOffset) / dpr
 
         // Get activity text
         const subHasPermission = isSub && ch.bubbleType === 'permission'

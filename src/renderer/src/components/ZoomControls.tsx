@@ -69,14 +69,13 @@ export function ZoomControls({ zoom, onZoomChange }: ZoomControlsProps) {
 
   return (
     <>
-      {/* Zoom level indicator at top-center */}
+      {/* Zoom level indicator - bottom right, above zoom buttons */}
       {showLevel && (
         <div
           style={{
             position: 'absolute',
-            top: 10,
-            left: '50%',
-            transform: 'translateX(-50%)',
+            bottom: 108,
+            right: 10,
             zIndex: 'var(--pixel-controls-z)',
             background: 'var(--pixel-bg)',
             border: '2px solid var(--pixel-border)',
@@ -89,18 +88,20 @@ export function ZoomControls({ zoom, onZoomChange }: ZoomControlsProps) {
             opacity: fadeOut ? 0 : 1,
             transition: `opacity ${ZOOM_LEVEL_FADE_DURATION_SEC}s ease-out`,
             pointerEvents: 'none',
+            minWidth: 80,
+            textAlign: 'center',
           }}
         >
           {zoom}x
         </div>
       )}
 
-      {/* Vertically stacked round buttons — top-left */}
+      {/* Vertically stacked round buttons — bottom-right */}
       <div
         style={{
           position: 'absolute',
-          top: 8,
-          left: 8,
+          bottom: 10,
+          right: 10,
           zIndex: 'var(--pixel-controls-z)',
           display: 'flex',
           flexDirection: 'column',

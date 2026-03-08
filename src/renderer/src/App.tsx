@@ -130,7 +130,13 @@ function App() {
 
   const isEditDirty = useCallback(() => editor.isEditMode && editor.isDirty, [editor.isEditMode, editor.isDirty])
 
-  const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty)
+  // Terminal handlers - must be defined before useExtensionMessages
+  const handleSetActiveTerminal = useCallback((terminalId: number) => {
+    setActiveTerminalId(terminalId)
+    setShowTerminal(true)
+  }, [])
+
+  const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty, handleSetActiveTerminal)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
 

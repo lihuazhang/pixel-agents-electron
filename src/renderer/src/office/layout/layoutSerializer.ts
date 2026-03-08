@@ -40,7 +40,17 @@ export function layoutToFurnitureInstances(furniture: PlacedFurniture[]): Furnit
     const x = item.col * TILE_SIZE
     const y = item.row * TILE_SIZE
     const spriteH = entry.sprite.length
-    let zY = y + spriteH
+
+    // Base z-sort: use tile bottom edge for consistent sorting with characters
+    // This ensures characters and furniture in the same row sort correctly
+    let zY = (item.row + 1) * TILE_SIZE
+
+    // For furniture that should render behind characters (like desks, bookshelves):
+    // Use the bottom of the furniture's footprint instead of the first row
+    // Characters standing in front of the furniture will have lower zY and render first
+    if (entry.footprintH > 1) {
+      zY = (item.row + entry.footprintH) * TILE_SIZE
+    }
 
     // Chair z-sorting: ensure characters sitting on chairs render correctly
     if (entry.category === 'chairs') {

@@ -131,8 +131,8 @@ export function renderScene(
     const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - cached.height)
 
     // Sort characters by pixel Y position (lower = in front = drawn later)
-    // Add TILE_SIZE to ensure characters render in front of furniture
-    const charZY = ch.y + TILE_SIZE + CHARACTER_Z_SORT_OFFSET
+    // Use pixel units (ch.y * TILE_SIZE) to match furniture/wall zY calculation
+    const charZY = ch.y * TILE_SIZE + TILE_SIZE + CHARACTER_Z_SORT_OFFSET
 
     // Matrix spawn/despawn effect — skip outline, use per-pixel rendering
     if (ch.matrixEffect) {
