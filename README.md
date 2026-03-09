@@ -1,6 +1,12 @@
 # Pixel Agents Electron
 
+> **Derived from [Pixel Agents](https://github.com/pablodelucca/pixel-agents)** — A VS Code extension by [Pablo Delucca](https://github.com/pablodelucca) that turns AI coding agents into animated pixel art characters. This project adapts the original concept as a standalone Electron application.
+
 A pixel-art style office visualization app built with Electron and React. Visualizes Claude Code agents as characters in an interactive office environment.
+
+## Promo Video
+
+<video src="output-cyberpunk.mp4" controls></video>
 
 ## Tech Stack
 
@@ -85,6 +91,14 @@ Claude CLI → JSONL file → FileWatcher → Main Process → IPC → Renderer
 - Layout persistence
 - Sub-agent support (Task tool)
 - Sound notifications
+
+## Acknowledgments
+
+This project is derived from and inspired by:
+
+- **[Pixel Agents](https://github.com/pablodelucca/pixel-agents)** — Original VS Code extension by [Pablo Delucca](https://github.com/pablodelucca)
+- **[Metro City Character Pack](https://jik-a-4.itch.io/metrocity-free-topdown-character-pack)** — Character sprites by JIK-A-4
+- **[Office Interior Tileset](https://donarg.itch.io/officetileset)** — Office tileset by Donarg
 
 ## License
 
