@@ -5,8 +5,7 @@
 A pixel-art style office visualization app built with Electron and React. Visualizes Claude Code agents as characters in an interactive office environment.
 
 ## Promo Video
-
-<video src="output-cyberpunk.mp4" controls></video>
+https://github-production-user-asset-6210df.s3.amazonaws.com/872749/560619012-6d764a24-5751-4594-8ce5-71e350a68fbe.mp4
 
 ## Tech Stack
 
